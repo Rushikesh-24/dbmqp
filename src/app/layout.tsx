@@ -11,48 +11,63 @@ const fredoka = Fredoka({
   weight: ["300", "400", "500", "600", "700"],
 })
 
-export const metadata: Metadata = {
-  title: "Database Management and Query Processing Project",
+export const metadata = {
+  title: "nomnom: Digital Menu, Order & Payment Solution | DBMS Project",
   description:
-    "A project on Database Management and Query Processing developed by our group: Rushikesh, Shrutvika, and Shikhaa.",
+    "NomNom is a comprehensive digital solution for restaurants, offering QR-based table ordering, real-time menu browsing (with allergy filtering), and integrated UPI payment processing. Developed by Rushikesh, Shrutvika, and Shikhaa for the Database Management and Query Processing Project.",
   keywords: [
+    "nomnom",
+    "NomNom",
+    "DBMS Project",
+    "GEC",
     "Database Management",
     "Query Processing",
-    "DBMS",
-    "SQL",
-    "Database Project",
-    "Data Modeling",
-    "Database Systems",
     "Rushikesh",
     "Shrutvika",
     "Shikhaa",
+    "QR Code Ordering",
+    "Digital Menu",
+    "Restaurant App",
+    "Table Service",
+    "Contactless Ordering",
+    "UPI Payment Integration",
+    "Food Ordering System",
+    "Menu Filtering",
+    "Allergy Filter",
+    "Restaurant Technology",
   ],
   authors: [{ name: "Rushikesh" }, { name: "Shrutvika" }, { name: "Shikhaa" }],
   creator: "Rushikesh, Shrutvika, Shikhaa",
+
+  // --- OpenGraph (Social Media Preview) ---
   openGraph: {
-    title: "Database Management and Query Processing Project",
+    title: "NomNom: Digital Menu, Order & Payment Solution",
     description:
-      "A project on Database Management and Query Processing developed by our group: Rushikesh, Shrutvika, and Shikhaa.",
+      "Seamless QR-based table ordering and payment integration. Perfecting the dining experience through smart technology. A project on Database Management and Query Processing.",
     url: "https://dbmqp.vercel.app/",
-    siteName: "DBMQP Project",
+    siteName: "NomNom DBMQP Project",
     images: [
       {
-        url: "https://dbmqp.vercel.app/vercel.svg",
+        url: "https://dbmqp.vercel.app/shrut.png",
         width: 1200,
-        height: 630,
-        alt: "Database Management and Query Processing Project",
+        height: 1200,
+        alt: "NomNom App Screenshot - Digital Menu and Ordering System",
       },
     ],
     locale: "en_US",
     type: "website",
   },
+  
+  // --- Twitter Card (Social Media Preview) ---
   twitter: {
     card: "summary_large_image",
-    title: "Database Management and Query Processing Project",
+    title: "NomNom: QR-Based Restaurant Ordering & Payment",
     description:
-      "A project on Database Management and Query Processing developed by our group: Rushikesh, Shrutvika, and Shikhaa.",
-    images: ["https://dbmqp.vercel.app/vercel.svg"],
+      "Contactless digital menu and order management developed as a Database Management project.",
+    images: ["https://dbmqp.vercel.app/shrut.png"],
   },
+  
+  // --- Robots (Crawlability) ---
   robots: {
     index: true,
     follow: true,
@@ -61,6 +76,9 @@ export const metadata: Metadata = {
       index: true,
       follow: true,
       noimageindex: false,
+      "max-snippet": -1,
+      "max-image-preview": "large",
+      "max-video-preview": -1,
     },
   },
 }
