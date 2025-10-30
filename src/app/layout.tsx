@@ -12,7 +12,7 @@ const fredoka = Fredoka({
 })
 
 export const metadata = {
-  title: "nomnom: Digital Menu, Order & Payment Solution | DBMS Project",
+  title: "nomnom",
   description:
     "NomNom is a comprehensive digital solution for restaurants, offering QR-based table ordering, real-time menu browsing (with allergy filtering), and integrated UPI payment processing. Developed by Rushikesh, Shrutvika, and Shikhaa for the Database Management and Query Processing Project.",
   keywords: [
