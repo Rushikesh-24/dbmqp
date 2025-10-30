@@ -5,15 +5,11 @@ import type React from "react"
 import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { isAuthenticated } from "@/lib/auth"
+import { setCookie } from "@/lib/utils";
 import { gsap } from "gsap"
 import { Mail, Lock, ArrowRight } from "lucide-react"
 import Image from "next/image"
-import logo from "../../../public/shrut.png"
-function setCookie(name: string, value: string, days = 7) {
-  const expires = new Date()
-  expires.setTime(expires.getTime() + days * 24 * 60 * 60 * 1000)
-  document.cookie = `${name}=${value};expires=${expires.toUTCString()};path=/`
-}
+import logo from "../../../public/shrut.png";
 
 const Page: NextPage = ({}) => {
   const [email, setEmail] = useState("")

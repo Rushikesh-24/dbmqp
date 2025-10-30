@@ -66,12 +66,17 @@ interface AnalyticsData {
   }>
 }
 
+
 export default function AnalyticsComponent() {
   const [orders, setOrders] = useState<OrderData[]>([])
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [restaurantInfo, setRestaurantInfo] = useState<RestaurantInfo | null>(null)
+  const [aiReport, setAiReport] = useState<string | null>(null)
+  const [aiLoading, setAiLoading] = useState(false)
+  // Time range state: "7d", "30d", "year"
+  const [timeRange, setTimeRange] = useState<"7d" | "30d" | "year">("30d")
 
   const getCookie = useCallback((name: string) => {
     if (typeof document !== "undefined") {
@@ -94,6 +99,122 @@ export default function AnalyticsComponent() {
     document.cookie = "token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;"
     window.location.href = "/signin"
   }, [])
+
+  const markdownToHtml = (markdown: string): string => {
+    // Escape HTML special characters first to prevent XSS
+    const html = markdown
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+
+    // Split by lines
+    const lines = html.split(/\r?\n/)
+    const result: string[] = []
+    const listDepthStack: number[] = []
+
+    function closeList(depth: number) {
+      while (listDepthStack.length > depth) {
+        result.push("</ul>")
+        listDepthStack.pop()
+      }
+    }
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trimRight()
+      // Horizontal rule
+      if (/^(---|\*\*\*)\s*$/.test(line)) {
+        closeList(0)
+        result.push("<hr />")
+        continue
+      }
+      // Headings
+      if (/^##\s+/.test(line)) {
+        closeList(0)
+        result.push("<h2>" + line.replace(/^##\s+/, "") + "</h2>")
+        continue
+      }
+      if (/^#\s+/.test(line)) {
+        closeList(0)
+        result.push("<h1>" + line.replace(/^#\s+/, "") + "</h1>")
+        continue
+      }
+      // Unordered lists (support for nested lists)
+      const ulMatch = line.match(/^(\s*)\*\s+(.*)$/)
+      if (ulMatch) {
+        const indent = ulMatch[1].length
+        const content = ulMatch[2]
+        const depth = Math.floor(indent / 2)
+        // Open new lists if needed
+        if (depth > listDepthStack.length) {
+          for (let d = listDepthStack.length; d < depth; d++) {
+            result.push("<ul>")
+            listDepthStack.push(d)
+          }
+        }
+        // Close lists if dedenting
+        if (depth < listDepthStack.length) {
+          closeList(depth)
+        }
+        // Open a list if not already in one
+        if (listDepthStack.length === 0) {
+          result.push("<ul>")
+          listDepthStack.push(0)
+        }
+        // Convert bold **text** and italic *text* inside list item
+        let itemContent = content
+        itemContent = itemContent.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+        itemContent = itemContent.replace(/\*(.+?)\*/g, "<em>$1</em>")
+        result.push(`<li>${itemContent}</li>`)
+        continue
+      } else {
+        // If we were in a list, close all open lists
+        if (listDepthStack.length > 0) {
+          closeList(0)
+        }
+      }
+      // Ignore empty lines (for paragraph separation)
+      if (line.trim() === "") {
+        continue
+      }
+      // Convert bold **text** and italic *text* for the rest
+      let processed = line
+      processed = processed.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+      processed = processed.replace(/\*(.+?)\*/g, "<em>$1</em>")
+      // Wrap in <p>
+      result.push(`<p>${processed}</p>`)
+    }
+    // Close any remaining open lists
+    if (listDepthStack.length > 0) {
+      closeList(0)
+    }
+    return result.join("\n")
+  }
+
+  const generateAIReport = async () => {
+    if (!analytics) return
+    try {
+      setAiLoading(true)
+      setAiReport(null)
+      const res = await fetch("/api/ai-analysis", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ analytics }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        setAiReport(data.report)
+        if (typeof window !== "undefined" && data.report) {
+          localStorage.setItem("aiReport", data.report)
+        }
+      } else {
+        setAiReport("⚠️ Failed to generate AI report.")
+      }
+    } catch {
+      setAiReport("⚠️ Network error while generating AI report.")
+    } finally {
+      setAiLoading(false)
+    }
+  }
 
   const fetchAnalytics = useCallback(async () => {
     try {
@@ -130,6 +251,7 @@ export default function AnalyticsComponent() {
 
       if (response.ok) {
         const data = await response.json()
+        console.log(data)
         setAnalytics(data.analytics)
         setOrders(data.orders)
         appCache.set(cacheKey, data, 1 * 60 * 1000)
@@ -151,19 +273,78 @@ export default function AnalyticsComponent() {
     fetchAnalytics()
   }, [])
 
-  const revenueChartData = {
-    labels:
-      analytics?.revenueByDay.map((item) => {
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const storedReport = localStorage.getItem("aiReport")
+      if (storedReport) {
+        setAiReport(storedReport)
+      }
+    }
+  }, [])
+
+  // Compute filtered/aggregated revenue data based on timeRange
+  let filteredRevenueData: { date: string; revenue: number; orders: number }[] = []
+  let chartLabels: string[] = []
+  let chartData: number[] = []
+  let chartLabel: string = ""
+  if (analytics) {
+    if (timeRange === "7d") {
+      // Last 7 days (show most recent 7 entries)
+      filteredRevenueData = analytics.revenueByDay.slice(-7)
+      chartLabels = filteredRevenueData.map((item) => {
         const date = new Date(item.date)
         return date.toLocaleDateString("en-US", {
           month: "short",
           day: "numeric",
         })
-      }) || [],
+      })
+      chartData = filteredRevenueData.map((item) => item.revenue)
+      chartLabel = "Daily Revenue (Last 7 Days)"
+    } else if (timeRange === "30d") {
+      // All available days (typically up to 30)
+      filteredRevenueData = analytics.revenueByDay
+      chartLabels = filteredRevenueData.map((item) => {
+        const date = new Date(item.date)
+        return date.toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+        })
+      })
+      chartData = filteredRevenueData.map((item) => item.revenue)
+      chartLabel = "Daily Revenue (Last 30 Days)"
+    } else if (timeRange === "year") {
+      // Aggregate by month
+      const monthMap: { [key: string]: number } = {}
+      analytics.revenueByDay.forEach((item) => {
+        const date = new Date(item.date)
+        const monthKey = `${date.getFullYear()}-${date.getMonth()}` // e.g., "2024-0" for Jan
+        monthMap[monthKey] = (monthMap[monthKey] || 0) + item.revenue
+      })
+      // Sort months chronologically
+      const sortedMonthKeys = Object.keys(monthMap).sort((a, b) => {
+        // Compare by year and month
+        const [ay, am] = a.split("-").map(Number)
+        const [by, bm] = b.split("-").map(Number)
+        return ay !== by ? ay - by : am - bm
+      })
+      chartLabels = sortedMonthKeys.map((k) => {
+        const [year, month] = k.split("-").map(Number)
+        // Show "Jan 2024"
+        return new Date(year, month).toLocaleDateString("en-US", {
+          month: "short",
+          year: "numeric",
+        })
+      })
+      chartData = sortedMonthKeys.map((k) => monthMap[k])
+      chartLabel = "Monthly Revenue (Year)"
+    }
+  }
+  const revenueChartData = {
+    labels: chartLabels,
     datasets: [
       {
-        label: "Daily Revenue",
-        data: analytics?.revenueByDay.map((item) => item.revenue) || [],
+        label: chartLabel,
+        data: chartData,
         borderColor: "#f4a261",
         backgroundColor: "rgba(244, 162, 97, 0.1)",
         tension: 0.4,
@@ -254,11 +435,49 @@ export default function AnalyticsComponent() {
     <div className="space-y-8">
       {/* Header */}
       <div>
-        <h2 className="text-3xl font-bold text-neutral-900 flex items-center gap-2">
-          <TrendingUp className="w-8 h-8 text-orange-500" />
-          Restaurant Analytics
-        </h2>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <TrendingUp className="w-8 h-8 text-orange-500" />
+            <h2 className="text-3xl font-bold text-neutral-900">Restaurant Analytics</h2>
+          </div>
+          {/* Time Range Selector */}
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-neutral-600">Time Range:</span>
+            <div className="inline-flex rounded-md shadow-sm" role="group">
+              <button
+                type="button"
+                className={`px-3 py-1 text-sm font-medium border border-neutral-200 ${timeRange === "7d" ? "bg-orange-500 text-white" : "bg-white text-neutral-700 hover:bg-neutral-50"} rounded-l-md`}
+                onClick={() => setTimeRange("7d")}
+              >
+                7d
+              </button>
+              <button
+                type="button"
+                className={`px-3 py-1 text-sm font-medium border-t border-b border-neutral-200 ${timeRange === "30d" ? "bg-orange-500 text-white" : "bg-white text-neutral-700 hover:bg-neutral-50"}`}
+                onClick={() => setTimeRange("30d")}
+              >
+                30d
+              </button>
+              <button
+                type="button"
+                className={`px-3 py-1 text-sm font-medium border border-neutral-200 ${timeRange === "year" ? "bg-orange-500 text-white" : "bg-white text-neutral-700 hover:bg-neutral-50"} rounded-r-md`}
+                onClick={() => setTimeRange("year")}
+              >
+                Year
+              </button>
+            </div>
+          </div>
+        </div>
         <p className="text-neutral-600 mt-2">Track your restaurant&apos;s performance and insights</p>
+        <div className="mt-4">
+          <button
+            onClick={generateAIReport}
+            disabled={aiLoading}
+            className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-md font-medium transition"
+          >
+            {aiLoading ? "Analyzing..." : "Generate AI Report"}
+          </button>
+        </div>
       </div>
 
       {/* Key Metrics */}
@@ -283,10 +502,21 @@ export default function AnalyticsComponent() {
         </div>
       </div>
 
+      {aiReport && (
+  <div className="bg-white border border-neutral-200 rounded-lg p-6">
+    <h3 className="text-lg font-semibold text-neutral-900 mb-4">AI Analysis Report</h3>
+    <div className="whitespace-pre-wrap text-neutral-700 leading-relaxed" dangerouslySetInnerHTML={{ __html: markdownToHtml(aiReport) }}></div>
+  </div>
+)}
+
       {/* Charts Row */}
       <div className="grid lg:grid-cols-2 gap-6">
         <div className="bg-white border border-neutral-200 rounded-lg p-6">
-          <h3 className="text-lg font-semibold text-neutral-900 mb-4">Revenue Trend (Last 30 Days)</h3>
+          <h3 className="text-lg font-semibold text-neutral-900 mb-4">
+            {timeRange === "7d" && "Revenue Trend (Last 7 Days)"}
+            {timeRange === "30d" && "Revenue Trend (Last 30 Days)"}
+            {timeRange === "year" && "Revenue Trend (Yearly by Month)"}
+          </h3>
           <div className="h-80">
             <Line data={revenueChartData} options={chartOptions} />
           </div>

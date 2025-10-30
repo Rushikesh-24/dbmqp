@@ -125,3 +125,10 @@ const getCookie = (name: string): string | null => {
   }
   return null;
 };
+
+export function setCookie(name: string, value: string, days = 7) {
+  console.log("Setting cookie:", { name, value, days });
+  const expires = new Date()
+  expires.setTime(expires.getTime() + days * 24 * 60 * 60 * 1000)
+  document.cookie = `${name}=${value};expires=${expires.toUTCString()};path=/`
+}
