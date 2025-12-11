@@ -92,11 +92,6 @@ export default function RootLayout({
     <html lang="en">
       <body
         className={`${fredoka.variable} antialiased`}
-        style={{
-          fontFamily: "var(--font-fredoka), sans-serif",
-          backgroundColor: "var(--color-neutral-50)",
-          color: "var(--color-neutral-900)",
-        }}
       >
         <Cursor />
         <Suspense fallback={null}>{children}</Suspense>

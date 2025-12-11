@@ -260,7 +260,7 @@ export default function Home() {
                 className="flex flex-col sm:flex-row gap-6"
               >
                 <Link
-                  href="/signup"
+                  href="/signin"
                   className="group bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:from-amber-600 hover:to-orange-600 transition-all duration-300 px-10 py-5 rounded-2xl text-xl font-bold flex items-center justify-center gap-3 shadow-2xl hover:shadow-amber-500/25 transform hover:-translate-y-1"
                 >
                   Start Free Trial
