@@ -44,13 +44,23 @@ export async function GET(request: Request) {
     const startDate = url.searchParams.get("startDate");
     const endDate = url.searchParams.get("endDate");
 
-    // Default to last 30 days if no dates provided
-    const defaultStartDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-    const defaultEndDate = new Date();
+    // If no dates provided, fetch all-time data
+    let dateFilter = "";
+    const queryParams: (string | number)[] = [decoded.id];
 
-    const filterStartDate =
-      startDate || defaultStartDate.toISOString().split("T")[0];
-    const filterEndDate = endDate || defaultEndDate.toISOString().split("T")[0];
+    if (startDate || endDate) {
+      // Default to last 30 days if only one date is provided
+      const defaultStartDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      const defaultEndDate = new Date();
+
+      const filterStartDate =
+        startDate || defaultStartDate.toISOString().split("T")[0];
+      const filterEndDate =
+        endDate || defaultEndDate.toISOString().split("T")[0];
+
+      dateFilter = "AND DATE(o.created_at) BETWEEN ? AND ?";
+      queryParams.push(filterStartDate, filterEndDate);
+    }
 
     // Fetch orders with table and user information
     const { rows: orders } = await turso.execute(
@@ -63,10 +73,10 @@ export async function GET(request: Request) {
             LEFT JOIN tables t ON o.table_id = t.id
             LEFT JOIN users u ON o.user_id = u.id
             WHERE o.restaurant_id = ?
-            AND DATE(o.created_at) BETWEEN ? AND ?
+            ${dateFilter}
             ORDER BY o.created_at DESC
         `,
-      [decoded.id, filterStartDate, filterEndDate]
+      queryParams
     );
 
     // Fetch order items for each order

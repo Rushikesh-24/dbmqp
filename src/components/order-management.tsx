@@ -2,7 +2,12 @@
 
 import type React from "react";
 import { useState, useEffect } from "react";
-import { ChefHat, Clock, AlertCircle } from "lucide-react";
+import { ChefHat, Clock, AlertCircle, Volume2, VolumeX } from "lucide-react";
+import dynamic from "next/dynamic";
+import type { OrderData, UserData, DishData } from "@/types/orders";
+
+// Dynamically import AIChef to avoid SSR issues with Three.js
+const AIChef = dynamic(() => import("./ai-chef"), { ssr: false });
 
 const getRestaurantInfo = async () => {
   return {
@@ -14,45 +19,6 @@ const getRestaurantInfo = async () => {
 interface RestaurantInfo {
   name: string;
   currency: string;
-}
-
-interface DishData {
-  id: string;
-  name: string;
-  description: string;
-  price: number;
-  prep_time_minutes: number;
-  cook_time_minutes: number;
-  course: string;
-  dietary_restrictions: string;
-  spiciness_level: number;
-}
-
-interface UserData {
-  id: string;
-  name: string;
-  phone: string;
-  legacyPoints: number;
-}
-
-interface OrderItemData {
-  dish_id: string;
-  quantity: number;
-  dish_details?: DishData;
-}
-
-interface OrderData {
-  id: string;
-  user_id: string;
-  restaurant_id: string;
-  table_id: string;
-  status: "pending" | "preparing" | "completed" | "paid";
-  total_amount: number;
-  special_notes: string;
-  created_at: string;
-  order_items: OrderItemData[];
-  user_details?: UserData;
-  priorityScore?: number;
 }
 
 const getToken = () => {
@@ -141,6 +107,7 @@ const getCoursePriority = (course: string) => {
 
 const OrderManagement: React.FC = () => {
   const [orders, setOrders] = useState<OrderData[]>([]);
+  const [previousOrders, setPreviousOrders] = useState<OrderData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [restaurantInfo, setRestaurantInfo] = useState<RestaurantInfo | null>(
@@ -148,6 +115,30 @@ const OrderManagement: React.FC = () => {
   );
   const [countdown, setCountdown] = useState(30);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
+  const [isVoiceEnabled, setIsVoiceEnabled] = useState(true);
+  const [isTestSpeaking, setIsTestSpeaking] = useState(false);
+
+  // Voice synthesis function for testing
+  const testVoice = () => {
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      const utterance = new SpeechSynthesisUtterance(
+        "Testing AI Chef voice. The kitchen is ready!"
+      );
+      utterance.lang = "en-US";
+      utterance.rate = 1.1;
+      utterance.pitch = 1.0;
+      utterance.volume = 1.0;
+
+      // Trigger animation
+      setIsTestSpeaking(true);
+
+      utterance.onend = () => {
+        setIsTestSpeaking(false);
+      };
+
+      window.speechSynthesis.speak(utterance);
+    }
+  };
 
   const fetchAndPrioritizeOrders = async (showLoading = true) => {
     if (showLoading) {
@@ -191,6 +182,7 @@ const OrderManagement: React.FC = () => {
         if (JSON.stringify(prevOrders) === JSON.stringify(newOrders)) {
           return prevOrders; // No change, keep previous reference to prevent re-render
         }
+        setPreviousOrders(prevOrders); // Store previous orders for AI Chef comparison
         return newOrders;
       });
 
@@ -287,17 +279,39 @@ const OrderManagement: React.FC = () => {
           <p className="text-neutral-600 mt-2">
             Manage incoming and in-progress orders from your customers.
           </p>
-          <p className="text-sm text-orange-600 mt-1 flex items-center gap-1">
-            <Clock className="w-4 h-4" />
-            Next refresh in {countdown}s
-          </p>
+          <div className="flex items-center gap-4 mt-2">
+            <p className="text-sm text-orange-600 flex items-center gap-1">
+              <Clock className="w-4 h-4" />
+              Next refresh in {countdown}s
+            </p>
+            <button
+              onClick={() => fetchAndPrioritizeOrders(true)}
+              className="px-4 py-1.5 rounded-lg bg-orange-500 text-white hover:bg-orange-600 transition-colors font-medium text-sm"
+            >
+              Refresh Now
+            </button>
+          </div>
         </div>
-        <button
-          onClick={() => fetchAndPrioritizeOrders(true)}
-          className="px-6 py-2 rounded-lg bg-orange-500 text-white hover:bg-orange-600 transition-colors font-medium"
-        >
-          Refresh Orders
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={testVoice}
+            className="p-2 rounded-md bg-orange-500 hover:bg-orange-600 transition-colors text-white text-sm font-medium shadow-lg"
+            title="Test voice"
+          >
+            Test Voice
+          </button>
+          <button
+            onClick={() => setIsVoiceEnabled(!isVoiceEnabled)}
+            className="p-2 rounded-md bg-orange-500 hover:bg-orange-600 transition-colors shadow-lg"
+            title={isVoiceEnabled ? "Disable voice" : "Enable voice"}
+          >
+            {isVoiceEnabled ? (
+              <Volume2 className="w-5 h-5 text-white" />
+            ) : (
+              <VolumeX className="w-5 h-5 text-white" />
+            )}
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -454,8 +468,19 @@ const OrderManagement: React.FC = () => {
           </div>
 
           {/* Preparation Sequence Panel */}
-          <div className="w-full lg:w-1/3">
+          <div className="w-full lg:w-1/3 relative">
             <div className="bg-white border border-neutral-200 rounded-lg p-6 sticky top-6">
+              {/* AI Chef positioned to stand on the border - centered above, hidden on mobile */}
+              {!loading && (
+                <div className="hidden lg:block absolute -top-36 left-1/2 -translate-x-1/2 w-40 h-40 z-10 pointer-events-none">
+                  <AIChef
+                    orders={orders}
+                    previousOrders={previousOrders}
+                    isTestSpeaking={isTestSpeaking}
+                  />
+                </div>
+              )}
+
               <h3 className="text-xl font-bold text-neutral-900 mb-4 flex items-center gap-2">
                 <Clock className="w-5 h-5 text-orange-500" />
                 Preparation Sequence
